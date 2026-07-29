@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Sales Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  html, body { margin: 0; padding: 0; }
+  #root { min-height: 100dvh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- React (no build step needed) -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<!-- Babel standalone: transpiles the JSX below directly in the browser -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback } = React;
+
+/* ---------------------------------------------------------------------- */
+/* Inline icons (replaces lucide-react so this file has zero build step)   */
+/* ---------------------------------------------------------------------- */
+
+const iconProps = (size) => ({
+  width: size,
+  height: size,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: "2",
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+});
+
+const Plus = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+);
+const Search = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+);
+const X = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+);
+const Pencil = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+);
+const Trash2 = ({ size = 16 }) => (
+  <svg {...iconProps(size)}>
+    <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+const Home = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><path d="m3 9 9-7 9 7" /><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10" /><polyline points="9 21 9 12 15 12 15 21" /></svg>
+);
+const KeyRound = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><path d="M2.5 19.5v2a1 1 0 0 0 1 1h3v-2h2v-2h1l1.9-1.9a6.5 6.5 0 1 0-4-4Z" /><circle cx="16.5" cy="7.5" r=".7" /></svg>
+);
+const ChevronLeft = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><polyline points="15 18 9 12 15 6" /></svg>
+);
+const ChevronRight = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><polyline points="9 18 15 12 9 6" /></svg>
+);
+const LayoutDashboard = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>
+);
+const ListChecks = ({ size = 16 }) => (
+  <svg {...iconProps(size)}>
+    <line x1="9" y1="6" x2="21" y2="6" /><line x1="9" y1="12" x2="21" y2="12" /><line x1="9" y1="18" x2="21" y2="18" />
+    <polyline points="3 6 4 7 6 5" /><polyline points="3 12 4 13 6 11" /><polyline points="3 18 4 19 6 17" />
+  </svg>
+);
+const Upload = ({ size = 16 }) => (
+  <svg {...iconProps(size)}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+);
+
+/* ---------------------------------------------------------------------- */
+/* Constants                                                               */
+/* ---------------------------------------------------------------------- */
+
+const ROLES = ["First Agent", "Second Agent", "Third Agent", "Buyers Agent"];
+const STATUSES = [
+  "Listed",
+  "Under Offer",
+  "Unconditional",
+  "Sold",
+  "Settled",
+  "Withdrawn",
+];
+const LEAD_SOURCES = [
+  "RM Database",
+  "My Database",
+  "Open Home",
+  "Referral",
+  "Past Client",
+  "Vendor Lead",
+  "Buyer Enquiry",
+  "Off Market",
+  "Other",
+];
+const REFERRAL_STATUSES = [
+  "Referred",
+  "In Progress",
+  "Leased",
+  "Paid",
+  "Not Proceeding",
+];
+
+const STATUS_COLOR = {
+  Listed: "var(--stamp-amber)",
+  "Under Offer": "var(--stamp-amber)",
+  Unconditional: "var(--stamp-blue)",
+  Sold: "var(--stamp-blue)",
+  Settled: "var(--stamp-green)",
+  Withdrawn: "var(--stamp-red)",
+  Referred: "var(--stamp-amber)",
+  "In Progress": "var(--stamp-blue)",
+  Leased: "var(--stamp-blue)",
+  Paid: "var(--stamp-green)",
+  "Not Proceeding": "var(--stamp-red)",
+};
+
+const STATUS_BG = {
+  Listed: "#FEF3E1",
+  "Under Offer": "#FEF3E1",
+  Unconditional: "#E8F0FE",
+  Sold: "#E8F0FE",
+  Settled: "#E5F6EC",
+  Withdrawn: "#FCEAEA",
+  Referred: "#FEF3E1",
+  "In Progress": "#E8F0FE",
+  Leased: "#E8F0FE",
+  Paid: "#E5F6EC",
+  "Not Proceeding": "#FCEAEA",
+};
+
+const MONTH_LABELS = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+
+const STORAGE_KEY = "sales-tracker-data";
+
+const uid = () =>
+  (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+function defaultFYStartYear() {
+  const now = new Date();
+  const month = now.getMonth(); // 0 = Jan
+  return month >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+function fyLabel(startYear) {
+  return `FY ${startYear}/${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+function fyBounds(startYear) {
+  const start = new Date(startYear, 6, 1); // 1 Jul
+  const end = new Date(startYear + 1, 5, 30, 23, 59, 59); // 30 Jun
+  return { start, end };
+}
+
+function inFY(dateStr, startYear) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const { start, end } = fyBounds(startYear);
+  return d >= start && d <= end;
+}
+
+function fyMonthIndex(dateStr) {
+  // returns 0-11 where 0 = July
+  const d = new Date(dateStr);
+  const m = d.getMonth(); // 0 = Jan
+  return (m + 6) % 12;
+}
+
+const money = (n, decimals = 0) =>
+  new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: decimals,
+    minimumFractionDigits: decimals,
+  }).format(Number(n) || 0);
+
+const fmtDate = (s) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+};
+
+function daysBetween(a, b) {
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return null;
+  return Math.round((d2.getTime() - d1.getTime()) / 86400000);
+}
+
+/* ---------------------------------------------------------------------- */
+/* No hardcoded sales data — the app starts empty. Use the Import data     */
+/* button (Dashboard tab) to paste in historical records privately; that   */
+/* data goes straight into your own storage and never lives in this code. */
+/* ---------------------------------------------------------------------- */
+
+const emptySale = () => ({
+  id: null,
+  address: "",
+  suburb: "",
+  soldDate: "",
+  settlementDate: "",
+  salePrice: "",
+  role: ROLES[1],
+  listingAgent: "",
+  buyerAgent: "",
+  vendorName: "",
+  buyerName: "",
+  leadSource: LEAD_SOURCES[0],
+  grossCommission: "",
+  yourGCI: "",
+  status: STATUSES[0],
+  notes: "",
+  photoUrl: "",
+  commissionPaidDate: "",
+});
+
+const emptyReferral = () => ({
+  id: null,
+  referralDate: "",
+  address: "",
+  suburb: "",
+  ownerName: "",
+  pmContact: "",
+  rentalEstimate: "",
+  leaseStart: "",
+  referralCommission: "",
+  paidDate: "",
+  status: REFERRAL_STATUSES[0],
+  notes: "",
+});
+
+/* ---------------------------------------------------------------------- */
+/* Small building blocks                                                   */
+/* ---------------------------------------------------------------------- */
+
+function Stamp({ label }) {
+  const color = STATUS_COLOR[label] || "var(--ink)";
+  const bg = STATUS_BG[label] || "var(--rule)";
+  return (
+    <span className="stamp" style={{ color, background: bg }}>
+      {label}
+    </span>
+  );
+}
+
+function StatCard({ label, value, sub }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      {sub ? <div className="stat-sub">{sub}</div> : null}
+    </div>
+  );
+}
+
+function PropertyPhoto({ src, alt }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="photo-placeholder">
+        <Home size={16} />
+      </div>
+    );
+  }
+  return <img src={src} alt={alt} className="top-sale-photo" onError={() => setFailed(true)} />;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mini charts (plain CSS/SVG — replaces recharts so this file has zero    */
+/* build step and no external chart library dependency)                   */
+/* ---------------------------------------------------------------------- */
+
+function MiniBarChart({ data, dataKey, labelKey, color, formatValue, height = 150 }) {
+  const max = Math.max(1, ...data.map((d) => Number(d[dataKey]) || 0));
+  return (
+    <div className="mini-chart" style={{ height }}>
+      <div className="mini-chart-bars">
+        {data.map((d, i) => {
+          const v = Number(d[dataKey]) || 0;
+          const pct = max > 0 ? (v / max) * 100 : 0;
+          return (
+            <div key={i} className="mini-bar-col" title={`${d[labelKey]}: ${formatValue(v)}`}>
+              <div className="mini-bar-track">
+                <div className="mini-bar-fill" style={{ height: `${pct}%`, background: color }} />
+              </div>
+              <div className="mini-bar-label">{d[labelKey]}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MiniHBarChart({ data, dataKey, labelKey, color, formatValue }) {
+  const max = Math.max(1, ...data.map((d) => Number(d[dataKey]) || 0));
+  return (
+    <div className="mini-hbar-chart">
+      {data.map((d, i) => {
+        const v = Number(d[dataKey]) || 0;
+        const pct = max > 0 ? (v / max) * 100 : 0;
+        return (
+          <div key={i} className="mini-hbar-row" title={`${d[labelKey]}: ${formatValue(v)}`}>
+            <div className="mini-hbar-label">{d[labelKey]}</div>
+            <div className="mini-hbar-track">
+              <div className="mini-hbar-fill" style={{ width: `${pct}%`, background: color }} />
+            </div>
+            <div className="mini-hbar-value">{formatValue(v)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MiniAreaChart({ data, dataKey, labelKey, color, height = 165 }) {
+  const max = Math.max(1, ...data.map((d) => Number(d[dataKey]) || 0));
+  const n = data.length;
+  const points = data.map((d, i) => {
+    const x = n > 1 ? (i / (n - 1)) * 100 : 50;
+    const y = 100 - ((Number(d[dataKey]) || 0) / max) * 100;
+    return [x, y];
+  });
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0]} ${p[1]}`).join(" ");
+  const areaPath = `${linePath} L 100 100 L 0 100 Z`;
+  return (
+    <div className="mini-area-chart" style={{ height }}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="mini-area-svg">
+        <defs>
+          <linearGradient id="areaFillGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={color} stopOpacity="0.4" />
+            <stop offset="95%" stopColor={color} stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#areaFillGradient)" stroke="none" />
+        <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="mini-area-labels">
+        {data.map((d, i) => (
+          <span key={i} className="mini-area-label">{d[labelKey]}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal">
+        <div className="modal-head">
+          <h3>{title}</h3>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDelete({ onConfirm, onCancel }) {
+  return (
+    <span className="confirm-row">
+      <span>Delete this entry?</span>
+      <button className="text-btn danger" onClick={onConfirm}>Yes, delete</button>
+      <button className="text-btn" onClick={onCancel}>Cancel</button>
+    </span>
+  );
+}
+
+function ImportDataModal({ onImport, onClose }) {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState(null);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const outcome = onImport(text);
+    setResult(outcome);
+    if (outcome.ok) setText("");
+  };
+
+  return (
+    <Modal title="Import data" onClose={onClose}>
+      <p className="import-help">
+        Paste the block of data given to you in chat, then tap Import. This writes straight to your
+        own private storage — it never becomes part of the app's code, so it stays out of the
+        published link.
+      </p>
+      <form onSubmit={handleSubmit} className="entry-form">
+        <textarea
+          className="import-textarea"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder='{"sales": [...], "referrals": [...]}'
+          rows={10}
+        />
+        {result && (
+          <p className={result.ok ? "import-result ok" : "import-result error"}>{result.message}</p>
+        )}
+        <div className="form-actions">
+          <button type="button" className="btn ghost" onClick={onClose}>Close</button>
+          <button type="submit" className="btn primary">Import</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Sale form                                                                */
+/* ---------------------------------------------------------------------- */
+
+function SaleForm({ initial, onSave, onCancel }) {
+  const [form, setForm] = useState(initial);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const gci = parseFloat(form.grossCommission) || 0;
+  const yourGci = parseFloat(form.yourGCI) || 0;
+  const splitPct = gci > 0 ? ((yourGci / gci) * 100).toFixed(2) : "—";
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.address.trim() || !form.settlementDate) return;
+    onSave({
+      ...form,
+      salePrice: parseFloat(form.salePrice) || 0,
+      grossCommission: gci,
+      yourGCI: yourGci,
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="entry-form">
+      <div className="form-grid">
+        <Field label="Property address">
+          <input value={form.address} onChange={set("address")} placeholder="12 Example Street" required />
+        </Field>
+        <Field label="Suburb">
+          <input value={form.suburb} onChange={set("suburb")} placeholder="Eltham" />
+        </Field>
+        <Field label="Sold date">
+          <input type="date" value={form.soldDate} onChange={set("soldDate")} />
+        </Field>
+        <Field label="Settlement date">
+          <input type="date" value={form.settlementDate} onChange={set("settlementDate")} required />
+        </Field>
+        <Field label="Sale price">
+          <input type="number" min="0" step="1" value={form.salePrice} onChange={set("salePrice")} placeholder="0" />
+        </Field>
+        <Field label="Your role">
+          <select value={form.role} onChange={set("role")}>
+            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
+        <Field label="Listing agent">
+          <input value={form.listingAgent} onChange={set("listingAgent")} placeholder="e.g. Rocco" />
+        </Field>
+        <Field label="Buyer's agent">
+          <input value={form.buyerAgent} onChange={set("buyerAgent")} />
+        </Field>
+        <Field label="Vendor name">
+          <input value={form.vendorName} onChange={set("vendorName")} />
+        </Field>
+        <Field label="Buyer name">
+          <input value={form.buyerName} onChange={set("buyerName")} />
+        </Field>
+        <Field label="Lead source">
+          <select value={form.leadSource} onChange={set("leadSource")}>
+            {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Status">
+          <select value={form.status} onChange={set("status")}>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Gross commission ($)">
+          <input type="number" min="0" step="0.01" value={form.grossCommission} onChange={set("grossCommission")} placeholder="0.00" />
+        </Field>
+        <Field label="Your GCI ($)">
+          <input type="number" min="0" step="0.01" value={form.yourGCI} onChange={set("yourGCI")} placeholder="0.00" />
+        </Field>
+        <div className="field">
+          <span className="field-label">Your split</span>
+          <div className="derived">{splitPct === "—" ? "—" : `${splitPct}%`}</div>
+        </div>
+        <div className="field field-wide">
+          <span className="field-label">Commission paid date (only if paid early via deposit release)</span>
+          <input type="date" value={form.commissionPaidDate} onChange={set("commissionPaidDate")} />
+          <span className="field-hint">Leave blank if you're paid at settlement as usual. Settlement date above stays the real settlement date either way.</span>
+        </div>
+        <div className="field field-wide">
+          <span className="field-label">Photo URL (optional — shows in Top 5 panel)</span>
+          <input type="url" value={form.photoUrl} onChange={set("photoUrl")} placeholder="https://…/photo.jpg" />
+        </div>
+        <div className="field field-wide">
+          <span className="field-label">Notes</span>
+          <textarea value={form.notes} onChange={set("notes")} rows={2} />
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn primary">Save entry</button>
+      </div>
+    </form>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Referral form                                                           */
+/* ---------------------------------------------------------------------- */
+
+function ReferralForm({ initial, onSave, onCancel }) {
+  const [form, setForm] = useState(initial);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.address.trim() || !form.referralDate) return;
+    onSave({
+      ...form,
+      referralCommission: parseFloat(form.referralCommission) || 0,
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="entry-form">
+      <div className="form-grid">
+        <Field label="Referral date">
+          <input type="date" value={form.referralDate} onChange={set("referralDate")} required />
+        </Field>
+        <Field label="Property address">
+          <input value={form.address} onChange={set("address")} placeholder="12 Example Street" required />
+        </Field>
+        <Field label="Suburb">
+          <input value={form.suburb} onChange={set("suburb")} />
+        </Field>
+        <Field label="Owner / landlord">
+          <input value={form.ownerName} onChange={set("ownerName")} />
+        </Field>
+        <Field label="PM contact">
+          <input value={form.pmContact} onChange={set("pmContact")} />
+        </Field>
+        <Field label="Rental estimate">
+          <input value={form.rentalEstimate} onChange={set("rentalEstimate")} placeholder="$1,300 - $1,400" />
+        </Field>
+        <Field label="Lease start">
+          <input type="date" value={form.leaseStart} onChange={set("leaseStart")} />
+        </Field>
+        <Field label="Referral commission ($)">
+          <input type="number" min="0" step="0.01" value={form.referralCommission} onChange={set("referralCommission")} placeholder="0.00" />
+        </Field>
+        <Field label="Paid date">
+          <input type="date" value={form.paidDate} onChange={set("paidDate")} />
+        </Field>
+        <Field label="Status">
+          <select value={form.status} onChange={set("status")}>
+            {REFERRAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <div className="field field-wide">
+          <span className="field-label">Notes</span>
+          <textarea value={form.notes} onChange={set("notes")} rows={2} />
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn primary">Save referral</button>
+      </div>
+    </form>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Dashboard tab                                                           */
+/* ---------------------------------------------------------------------- */
+
+function DashboardTab({ salesInFY, referralsInFY, fyStartYear, onImportClick }) {
+  const totalSaleValue = salesInFY.reduce((s, r) => s + (Number(r.salePrice) || 0), 0);
+  const totalGross = salesInFY.reduce((s, r) => s + (Number(r.grossCommission) || 0), 0);
+  const totalYourGCI = salesInFY.reduce((s, r) => s + (Number(r.yourGCI) || 0), 0);
+  const settledCount = salesInFY.filter((r) => r.status === "Settled").length;
+  const avgSale = salesInFY.length ? totalSaleValue / salesInFY.length : 0;
+  const avgYourGciPerSale = salesInFY.length ? totalYourGCI / salesInFY.length : 0;
+
+  const roleRows = ROLES.map((role) => {
+    const rows = salesInFY.filter((r) => r.role === role);
+    return {
+      role,
+      count: rows.length,
+      saleValue: rows.reduce((s, r) => s + (Number(r.salePrice) || 0), 0),
+      gross: rows.reduce((s, r) => s + (Number(r.grossCommission) || 0), 0),
+      yourGci: rows.reduce((s, r) => s + (Number(r.yourGCI) || 0), 0),
+    };
+  });
+
+  const statusRows = STATUSES.map((status) => {
+    const rows = salesInFY.filter((r) => r.status === status);
+    return {
+      status,
+      count: rows.length,
+      value: rows.reduce((s, r) => s + (Number(r.salePrice) || 0), 0),
+    };
+  }).filter((s) => s.count > 0);
+
+  const monthlyData = MONTH_LABELS.map((label, idx) => {
+    const gci = salesInFY
+      .filter((r) => r.settlementDate && fyMonthIndex(r.settlementDate) === idx)
+      .reduce((s, r) => s + (Number(r.yourGCI) || 0), 0);
+    return { month: label, gci };
+  });
+
+  let runningTotal = 0;
+  const monthlyCumulative = monthlyData.map((m) => {
+    runningTotal += m.gci;
+    return { ...m, cumulative: runningTotal };
+  });
+
+  const roleChartData = roleRows.map((r) => ({ name: r.role.replace(" Agent", ""), gci: r.yourGci }));
+
+  const topSales = [...salesInFY]
+    .sort((a, b) => (Number(b.salePrice) || 0) - (Number(a.salePrice) || 0))
+    .slice(0, 5);
+
+  const leadSourceMap = {};
+  salesInFY.forEach((r) => {
+    const key = r.leadSource || "Unspecified";
+    if (!leadSourceMap[key]) leadSourceMap[key] = { name: key, count: 0, value: 0, gci: 0 };
+    leadSourceMap[key].count += 1;
+    leadSourceMap[key].value += Number(r.salePrice) || 0;
+    leadSourceMap[key].gci += Number(r.yourGCI) || 0;
+  });
+  const leadSourceRows = Object.values(leadSourceMap).sort((a, b) => b.gci - a.gci);
+
+  const suburbMap = {};
+  salesInFY.forEach((r) => {
+    const key = (r.suburb || "").trim() || "Unspecified";
+    if (!suburbMap[key]) suburbMap[key] = { name: key, count: 0, value: 0, gci: 0 };
+    suburbMap[key].count += 1;
+    suburbMap[key].value += Number(r.salePrice) || 0;
+    suburbMap[key].gci += Number(r.yourGCI) || 0;
+  });
+  const suburbRows = Object.values(suburbMap).sort((a, b) => b.count - a.count).slice(0, 6);
+
+  const lagDays = salesInFY
+    .filter((r) => r.soldDate && r.settlementDate)
+    .map((r) => daysBetween(r.soldDate, r.settlementDate))
+    .filter((d) => d !== null && d >= 0);
+  const avgLagDays = lagDays.length ? Math.round(lagDays.reduce((s, d) => s + d, 0) / lagDays.length) : null;
+
+  const referralTotalCommission = referralsInFY.reduce((s, r) => s + (Number(r.referralCommission) || 0), 0);
+  const referralStatusRows = REFERRAL_STATUSES.map((status) => ({
+    status,
+    count: referralsInFY.filter((r) => r.status === status).length,
+    commission: referralsInFY
+      .filter((r) => r.status === status)
+      .reduce((s, r) => s + (Number(r.referralCommission) || 0), 0),
+  })).filter((s) => s.count > 0);
+  const paidReferrals = referralsInFY.filter((r) => r.status === "Paid").length;
+  const referralPaidRate = referralsInFY.length ? Math.round((paidReferrals / referralsInFY.length) * 100) : null;
+
+  const insights = [];
+  if (leadSourceRows.length) {
+    const top = leadSourceRows[0];
+    insights.push(`${top.name} is your strongest lead source this FY — ${top.count} sale${top.count === 1 ? "" : "s"} worth ${money(top.gci, 2)} in GCI.`);
+  }
+  if (suburbRows.length) {
+    const top = suburbRows[0];
+    insights.push(`${top.name} leads by volume with ${top.count} sale${top.count === 1 ? "" : "s"} this FY.`);
+  }
+  if (avgLagDays !== null) {
+    insights.push(`Average time from sold to settlement: ${avgLagDays} day${avgLagDays === 1 ? "" : "s"}.`);
+  }
+  if (salesInFY.length) {
+    insights.push(`Average GCI per sale this FY: ${money(avgYourGciPerSale, 2)}.`);
+  }
+  if (referralPaidRate !== null) {
+    insights.push(`${referralPaidRate}% of rental referrals logged this FY have been paid.`);
+  }
+
+  return (
+    <div className="dashboard">
+      <button className="import-link" onClick={onImportClick}>
+        <Upload size={13} /> Import data
+      </button>
+      <div className="stat-strip">
+        <StatCard label="Settlements booked" value={salesInFY.length} sub={`${settledCount} settled`} />
+        <StatCard label="Total sale value" value={money(totalSaleValue)} />
+        <StatCard label="Gross commission" value={money(totalGross, 2)} />
+        <StatCard label="Your GCI" value={money(totalYourGCI, 2)} sub="ledger total, this FY" />
+        <StatCard label="Average sale price" value={salesInFY.length ? money(avgSale) : "—"} />
+      </div>
+
+      <div className="panel">
+        <h4>Top 5 sales, {fyLabel(fyStartYear)}</h4>
+        {topSales.length === 0 ? (
+          <p className="muted">No sales logged for this FY yet.</p>
+        ) : (
+          <div className="top-sales-list">
+            {topSales.map((s, i) => (
+              <div key={s.id} className="top-sale-card">
+                <div className="top-sale-photo-wrap">
+                  <PropertyPhoto src={s.photoUrl} alt={s.address} />
+                  <span className="top-sale-rank">#{i + 1}</span>
+                </div>
+                <div className="top-sale-info">
+                  <div className="top-sale-text">
+                    <div className="addr">{s.address}</div>
+                    <div className="suburb">{s.suburb}</div>
+                  </div>
+                  <div className="top-sale-price">{money(s.salePrice)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="dash-columns">
+        <div className="panel">
+          <h4>By agent role</h4>
+          <div className="table-scroll">
+            <table className="ledger-table compact">
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>Count</th>
+                <th>Sale value</th>
+                <th>Gross comm.</th>
+                <th>Your GCI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {roleRows.map((r) => (
+                <tr key={r.role}>
+                  <td>{r.role}</td>
+                  <td className="num">{r.count}</td>
+                  <td className="num">{money(r.saleValue)}</td>
+                  <td className="num">{money(r.gross, 2)}</td>
+                  <td className="num">{money(r.yourGci, 2)}</td>
+                </tr>
+              ))}
+            </tbody>
+            </table>
+          </div>
+
+          {statusRows.length > 0 && (
+            <>
+              <h4 className="mt">Pipeline by status</h4>
+              <div className="stamp-row">
+                {statusRows.map((s) => (
+                  <div key={s.status} className="stamp-count">
+                    <Stamp label={s.status} />
+                    <span className="stamp-count-num">{s.count} · {money(s.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="panel">
+          <h4>Your GCI by role</h4>
+          <div className="chart-wrap">
+            <MiniBarChart data={roleChartData} dataKey="gci" labelKey="name" color="var(--brass)" formatValue={(v) => money(v, 2)} height={150} />
+          </div>
+
+          <h4 className="mt">Your GCI by month, {fyLabel(fyStartYear)}</h4>
+          <div className="chart-wrap">
+            <MiniBarChart data={monthlyData} dataKey="gci" labelKey="month" color="var(--ink-light)" formatValue={(v) => money(v, 2)} height={150} />
+          </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h4>Cumulative GCI progress, {fyLabel(fyStartYear)}</h4>
+        <div className="chart-wrap">
+          <MiniAreaChart data={monthlyCumulative} dataKey="cumulative" labelKey="month" color="var(--brass)" height={165} />
+        </div>
+      </div>
+
+      {insights.length > 0 && (
+        <div className="panel">
+          <h4>Key insights, {fyLabel(fyStartYear)}</h4>
+          <ul className="insight-list">
+            {insights.map((line, i) => (
+              <li key={i} className="insight-item">{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="dash-columns">
+        <div className="panel">
+          <h4>Lead source performance</h4>
+          {leadSourceRows.length === 0 ? (
+            <p className="muted">No sales logged for this FY yet.</p>
+          ) : (
+            <div className="chart-wrap">
+              <MiniHBarChart data={leadSourceRows} dataKey="gci" labelKey="name" color="var(--stamp-blue)" formatValue={(v) => money(v, 2)} />
+            </div>
+          )}
+        </div>
+
+        <div className="panel">
+          <h4>Top suburbs by volume</h4>
+          {suburbRows.length === 0 ? (
+            <p className="muted">No sales logged for this FY yet.</p>
+          ) : (
+            <div className="chart-wrap">
+              <MiniHBarChart data={suburbRows} dataKey="count" labelKey="name" color="var(--stamp-green)" formatValue={(v) => `${v} sale${v === 1 ? "" : "s"}`} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <h4>Rental referrals, {fyLabel(fyStartYear)}</h4>
+        <div className="stat-strip small">
+          <StatCard label="Total referrals" value={referralsInFY.length} />
+          <StatCard label="Referral commission" value={money(referralTotalCommission, 2)} />
+          <StatCard label="Paid conversion" value={referralPaidRate !== null ? `${referralPaidRate}%` : "—"} />
+        </div>
+        {referralStatusRows.length > 0 && (
+          <div className="stamp-row">
+            {referralStatusRows.map((s) => (
+              <div key={s.status} className="stamp-count">
+                <Stamp label={s.status} />
+                <span className="stamp-count-num">{s.count} · {money(s.commission, 2)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Sales tab                                                                */
+/* ---------------------------------------------------------------------- */
+
+function SalesTab({ sales, fyStartYear, onAdd, onUpdate, onDelete }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [roleFilter, setRoleFilter] = useState("All");
+  const [editing, setEditing] = useState(null); // sale object or "new"
+  const [confirmId, setConfirmId] = useState(null);
+
+  const rows = useMemo(() => {
+    return sales
+      .filter((r) => inFY(r.settlementDate, fyStartYear))
+      .filter((r) => statusFilter === "All" || r.status === statusFilter)
+      .filter((r) => roleFilter === "All" || r.role === roleFilter)
+      .filter((r) => {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return (
+          r.address.toLowerCase().includes(q) ||
+          r.suburb.toLowerCase().includes(q) ||
+          (r.vendorName || "").toLowerCase().includes(q) ||
+          (r.buyerName || "").toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => (b.settlementDate || "").localeCompare(a.settlementDate || ""));
+  }, [sales, fyStartYear, query, statusFilter, roleFilter]);
+
+  const unscheduledCount = useMemo(
+    () => sales.filter((r) => !r.settlementDate).length,
+    [sales]
+  );
+
+  const closeModal = () => setEditing(null);
+
+  return (
+    <div className="tab-panel">
+      <div className="tab-panel-head">
+        <h3>Sales in {fyLabel(fyStartYear)}</h3>
+        {unscheduledCount > 0 && (
+          <span className="tab-panel-note">
+            {unscheduledCount} sale{unscheduledCount === 1 ? "" : "s"} with no settlement date yet aren't shown here — add one to place them in a year.
+          </span>
+        )}
+      </div>
+      <div className="toolbar">
+        <div className="search-box">
+          <Search size={15} />
+          <input placeholder="Search address, suburb, vendor, buyer…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option>All</option>
+          {STATUSES.map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+          <option>All</option>
+          {ROLES.map((r) => <option key={r}>{r}</option>)}
+        </select>
+        <button className="btn primary" onClick={() => setEditing(emptySale())}>
+          <Plus size={16} /> Add sale
+        </button>
+      </div>
+
+      <div className="entry-list">
+        {rows.length === 0 && (
+          <p className="empty-state">No sales in {fyLabel(fyStartYear)} match this view yet.</p>
+        )}
+        {rows.map((r) => (
+          <div key={r.id} className="entry-card">
+            <div className="entry-card-top">
+              <div>
+                <div className="addr">{r.address}</div>
+                <div className="suburb">{r.suburb}</div>
+              </div>
+              <div className="entry-card-actions">
+                {confirmId !== r.id && (
+                  <>
+                    <button className="icon-btn" onClick={() => setEditing(r)} aria-label="Edit"><Pencil size={16} /></button>
+                    <button className="icon-btn" onClick={() => setConfirmId(r.id)} aria-label="Delete"><Trash2 size={16} /></button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="entry-card-row">
+              <Stamp label={r.status} />
+              <span className="entry-card-meta">
+                {r.role} · Settles {fmtDate(r.settlementDate)}
+                {r.commissionPaidDate ? ` · Paid ${fmtDate(r.commissionPaidDate)}` : ""}
+              </span>
+            </div>
+            <div className="entry-card-figures">
+              <div className="figure">
+                <span className="figure-label">Sale price</span>
+                <span className="figure-value">{money(r.salePrice)}</span>
+              </div>
+              <div className="figure">
+                <span className="figure-label">Gross comm.</span>
+                <span className="figure-value">{money(r.grossCommission, 2)}</span>
+              </div>
+              <div className="figure">
+                <span className="figure-label">Your GCI</span>
+                <span className="figure-value">{money(r.yourGCI, 2)}</span>
+              </div>
+            </div>
+            {confirmId === r.id && (
+              <div className="entry-card-confirm">
+                <ConfirmDelete onConfirm={() => { onDelete(r.id); setConfirmId(null); }} onCancel={() => setConfirmId(null)} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {editing && (
+        <Modal title={editing.id ? "Edit sale" : "Add sale"} onClose={closeModal}>
+          <SaleForm
+            initial={editing}
+            onCancel={closeModal}
+            onSave={(data) => {
+              if (editing.id) onUpdate(data);
+              else onAdd({ ...data, id: uid() });
+              closeModal();
+            }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Referrals tab                                                           */
+/* ---------------------------------------------------------------------- */
+
+function ReferralsTab({ referrals, onAdd, onUpdate, onDelete }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [editing, setEditing] = useState(null);
+  const [confirmId, setConfirmId] = useState(null);
+
+  const rows = useMemo(() => {
+    return referrals
+      .filter((r) => statusFilter === "All" || r.status === statusFilter)
+      .filter((r) => {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return (
+          r.address.toLowerCase().includes(q) ||
+          r.suburb.toLowerCase().includes(q) ||
+          (r.ownerName || "").toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => (b.referralDate || "").localeCompare(a.referralDate || ""));
+  }, [referrals, query, statusFilter]);
+
+  const closeModal = () => setEditing(null);
+
+  return (
+    <div className="tab-panel">
+      <div className="toolbar">
+        <div className="search-box">
+          <Search size={15} />
+          <input placeholder="Search address, suburb, owner…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option>All</option>
+          {REFERRAL_STATUSES.map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <button className="btn primary" onClick={() => setEditing(emptyReferral())}>
+          <Plus size={16} /> Add referral
+        </button>
+      </div>
+
+      <div className="entry-list">
+        {rows.length === 0 && (
+          <p className="empty-state">No rental referrals logged yet.</p>
+        )}
+        {rows.map((r) => (
+          <div key={r.id} className="entry-card">
+            <div className="entry-card-top">
+              <div>
+                <div className="addr">{r.address}</div>
+                <div className="suburb">{r.suburb}</div>
+              </div>
+              <div className="entry-card-actions">
+                {confirmId !== r.id && (
+                  <>
+                    <button className="icon-btn" onClick={() => setEditing(r)} aria-label="Edit"><Pencil size={16} /></button>
+                    <button className="icon-btn" onClick={() => setConfirmId(r.id)} aria-label="Delete"><Trash2 size={16} /></button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="entry-card-row">
+              <Stamp label={r.status} />
+              <span className="entry-card-meta">Referred {fmtDate(r.referralDate)}{r.pmContact ? ` · ${r.pmContact}` : ""}</span>
+            </div>
+            <div className="entry-card-figures">
+              <div className="figure">
+                <span className="figure-label">Commission</span>
+                <span className="figure-value">{money(r.referralCommission, 2)}</span>
+              </div>
+              <div className="figure">
+                <span className="figure-label">Paid</span>
+                <span className="figure-value">{r.paidDate ? fmtDate(r.paidDate) : "—"}</span>
+              </div>
+            </div>
+            {confirmId === r.id && (
+              <div className="entry-card-confirm">
+                <ConfirmDelete onConfirm={() => { onDelete(r.id); setConfirmId(null); }} onCancel={() => setConfirmId(null)} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {editing && (
+        <Modal title={editing.id ? "Edit referral" : "Add referral"} onClose={closeModal}>
+          <ReferralForm
+            initial={editing}
+            onCancel={closeModal}
+            onSave={(data) => {
+              if (editing.id) onUpdate(data);
+              else onAdd({ ...data, id: uid() });
+              closeModal();
+            }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Root app                                                                 */
+/* ---------------------------------------------------------------------- */
+
+function PropertySalesTracker() {
+  const [loading, setLoading] = useState(true);
+  const [saveError, setSaveError] = useState(false);
+  const [sales, setSales] = useState([]);
+  const [referrals, setReferrals] = useState([]);
+  const [fyStartYear, setFyStartYear] = useState(defaultFYStartYear());
+  const [tab, setTab] = useState("dashboard");
+  const [importOpen, setImportOpen] = useState(false);
+
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "viewport";
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover");
+  }, []);
+
+  const persist = useCallback((nextSales, nextReferrals, nextFY) => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          sales: nextSales,
+          referrals: nextReferrals,
+          fyStartYear: nextFY,
+        })
+      );
+      setSaveError(false);
+    } catch (e) {
+      setSaveError(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    let loadedSales = [];
+    let loadedReferrals = [];
+    let loadedFY = defaultFYStartYear();
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        loadedSales = Array.isArray(parsed.sales) ? parsed.sales : [];
+        loadedReferrals = Array.isArray(parsed.referrals) ? parsed.referrals : [];
+        loadedFY = typeof parsed.fyStartYear === "number" ? parsed.fyStartYear : defaultFYStartYear();
+      }
+    } catch (e) {
+      // No stored data yet, or it couldn't be read — start empty.
+    }
+    setSales(loadedSales);
+    setReferrals(loadedReferrals);
+    setFyStartYear(loadedFY);
+    setLoading(false);
+  }, []);
+
+  const changeFY = (delta) => {
+    const next = fyStartYear + delta;
+    setFyStartYear(next);
+    persist(sales, referrals, next);
+  };
+
+  const addSale = (sale) => {
+    const next = [...sales, sale];
+    setSales(next);
+    persist(next, referrals, fyStartYear);
+  };
+  const updateSale = (sale) => {
+    const next = sales.map((s) => (s.id === sale.id ? sale : s));
+    setSales(next);
+    persist(next, referrals, fyStartYear);
+  };
+  const deleteSale = (id) => {
+    const next = sales.filter((s) => s.id !== id);
+    setSales(next);
+    persist(next, referrals, fyStartYear);
+  };
+
+  const addReferral = (referral) => {
+    const next = [...referrals, referral];
+    setReferrals(next);
+    persist(sales, next, fyStartYear);
+  };
+  const updateReferral = (referral) => {
+    const next = referrals.map((r) => (r.id === referral.id ? referral : r));
+    setReferrals(next);
+    persist(sales, next, fyStartYear);
+  };
+  const deleteReferral = (id) => {
+    const next = referrals.filter((r) => r.id !== id);
+    setReferrals(next);
+    persist(sales, next, fyStartYear);
+  };
+
+  const handleImport = (text) => {
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      return { ok: false, message: "That doesn't look like valid data — check nothing got cut off when you pasted it." };
+    }
+
+    const incomingSales = Array.isArray(parsed.sales) ? parsed.sales : [];
+    const incomingReferrals = Array.isArray(parsed.referrals) ? parsed.referrals : [];
+    if (incomingSales.length === 0 && incomingReferrals.length === 0) {
+      return { ok: false, message: "No sales or referrals found in that data." };
+    }
+
+    const saleKey = (s) => `${(s.address || "").toLowerCase().trim()}|${s.settlementDate || ""}|${s.salePrice || ""}`;
+    const existingSaleKeys = new Set(sales.map(saleKey));
+    const newSales = incomingSales
+      .filter((s) => !existingSaleKeys.has(saleKey(s)))
+      .map((s) => ({ ...emptySale(), ...s, id: uid() }));
+
+    const referralKey = (r) => `${(r.address || "").toLowerCase().trim()}|${r.referralDate || ""}|${r.referralCommission || ""}`;
+    const existingReferralKeys = new Set(referrals.map(referralKey));
+    const newReferrals = incomingReferrals
+      .filter((r) => !existingReferralKeys.has(referralKey(r)))
+      .map((r) => ({ ...emptyReferral(), ...r, id: uid() }));
+
+    const nextSales = [...sales, ...newSales];
+    const nextReferrals = [...referrals, ...newReferrals];
+    setSales(nextSales);
+    setReferrals(nextReferrals);
+    persist(nextSales, nextReferrals, fyStartYear);
+
+    const skipped = (incomingSales.length - newSales.length) + (incomingReferrals.length - newReferrals.length);
+    let message = `Added ${newSales.length} sale${newSales.length === 1 ? "" : "s"} and ${newReferrals.length} referral${newReferrals.length === 1 ? "" : "s"}.`;
+    if (skipped > 0) {
+      message += ` Skipped ${skipped} that looked already imported.`;
+    }
+    return { ok: true, message };
+  };
+
+  const salesInFY = useMemo(
+    () => sales.filter((s) => inFY(s.settlementDate, fyStartYear)),
+    [sales, fyStartYear]
+  );
+  const referralsInFY = useMemo(
+    () => referrals.filter((r) => inFY(r.referralDate, fyStartYear)),
+    [referrals, fyStartYear]
+  );
+
+  if (loading) {
+    return (
+      <div className="tracker-root">
+        <style>{CSS}</style>
+        <div className="loading">Opening the ledger…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tracker-root">
+      <style>{CSS}</style>
+
+      <header className="app-header">
+        <div className="brand">
+          <Home size={20} />
+          <div>
+            <h1>Sales Ledger</h1>
+            <p>Lachlan Barclay · Morrison Kleeman Estate Agents</p>
+          </div>
+        </div>
+        <div className="fy-switch">
+          <button className="icon-btn" onClick={() => changeFY(-1)} aria-label="Previous financial year"><ChevronLeft size={18} /></button>
+          <span>{fyLabel(fyStartYear)}</span>
+          <button className="icon-btn" onClick={() => changeFY(1)} aria-label="Next financial year"><ChevronRight size={18} /></button>
+        </div>
+      </header>
+
+      <nav className="bottom-nav">
+        <button className={tab === "dashboard" ? "bottom-nav-item active" : "bottom-nav-item"} onClick={() => setTab("dashboard")}>
+          <LayoutDashboard size={20} />
+          <span>Dashboard</span>
+        </button>
+        <button className={tab === "sales" ? "bottom-nav-item active" : "bottom-nav-item"} onClick={() => setTab("sales")}>
+          <ListChecks size={20} />
+          <span>Sales</span>
+        </button>
+        <button className={tab === "referrals" ? "bottom-nav-item active" : "bottom-nav-item"} onClick={() => setTab("referrals")}>
+          <KeyRound size={20} />
+          <span>Referrals</span>
+        </button>
+      </nav>
+
+      {saveError && (
+        <div className="save-warning">Couldn't save your last change — it's still on screen, but try again in a moment.</div>
+      )}
+
+      <main>
+        {tab === "dashboard" && (
+          <DashboardTab salesInFY={salesInFY} referralsInFY={referralsInFY} fyStartYear={fyStartYear} onImportClick={() => setImportOpen(true)} />
+        )}
+        {tab === "sales" && (
+          <SalesTab sales={sales} fyStartYear={fyStartYear} onAdd={addSale} onUpdate={updateSale} onDelete={deleteSale} />
+        )}
+        {tab === "referrals" && (
+          <ReferralsTab referrals={referrals} onAdd={addReferral} onUpdate={updateReferral} onDelete={deleteReferral} />
+        )}
+      </main>
+
+      {importOpen && (
+        <ImportDataModal onImport={handleImport} onClose={() => setImportOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Styles                                                                   */
+/* ---------------------------------------------------------------------- */
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  margin: 0;
+}
+
+.tracker-root {
+  --paper: #F3F4F7;
+  --paper-card: #FFFFFF;
+  --ink: #14161F;
+  --ink-light: #6B7280;
+  --rule: #E7E8EC;
+  --brass: #0D9488;
+  --stamp-green: #16A34A;
+  --stamp-amber: #D97706;
+  --stamp-blue: #2563EB;
+  --stamp-red: #DC2626;
+  --font-display: 'Manrope', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-ui: 'Inter', sans-serif;
+  --shadow-card: 0 1px 2px rgba(20, 22, 31, 0.04), 0 2px 8px rgba(20, 22, 31, 0.05);
+
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  min-height: 100dvh;
+  padding: 0 16px calc(86px + env(safe-area-inset-bottom)) 16px;
+  box-sizing: border-box;
+  -webkit-text-size-adjust: 100%;
+}
+.tracker-root * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+.loading {
+  font-family: var(--font-display);
+  font-size: 18px;
+  padding: 60px 0;
+  text-align: center;
+  color: var(--ink-light);
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--paper);
+  border-bottom: 2px solid var(--ink);
+  padding: calc(14px + env(safe-area-inset-top)) 0 12px;
+  margin: 0 -16px 6px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+.brand p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-light);
+  letter-spacing: 0.3px;
+}
+.fy-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--paper-card);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 2px 4px;
+}
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--paper-card);
+  border-top: 1px solid var(--rule);
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  z-index: 30;
+}
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: var(--ink-light);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 7px 4px;
+  border-radius: 12px;
+  min-height: 52px;
+}
+.bottom-nav-item.active {
+  color: var(--ink);
+  background: rgba(156, 107, 44, 0.14);
+}
+
+.save-warning {
+  background: #F3E3D6;
+  border: 1px solid var(--stamp-red);
+  color: var(--stamp-red);
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+
+/* Stat cards */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-strip.small { margin-bottom: 12px; }
+.stat-card {
+  background: var(--paper-card);
+  border: none;
+  box-shadow: var(--shadow-card);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--ink-light);
+  margin-bottom: 6px;
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 21px;
+  font-weight: 600;
+}
+.stat-sub {
+  font-size: 11.5px;
+  color: var(--ink-light);
+  margin-top: 3px;
+}
+
+.dash-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--paper-card);
+  border: none;
+  box-shadow: var(--shadow-card);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  min-width: 0;
+}
+.panel h4 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.panel h4.mt { margin-top: 18px; }
+
+.chart-wrap { margin-bottom: 4px; min-width: 0; overflow: hidden; }
+
+.muted {
+  color: var(--ink-light);
+  font-size: 12.5px;
+  font-style: italic;
+  margin: 4px 0;
+}
+
+.insight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.insight-item {
+  position: relative;
+  padding-left: 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.insight-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brass);
+}
+
+.top-sales-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.top-sale-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--paper-card);
+  border: none;
+  box-shadow: var(--shadow-card);
+  border-radius: 14px;
+  padding: 7px 10px 7px 7px;
+}
+.top-sale-photo-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--rule);
+}
+.top-sale-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.photo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-light);
+  background: repeating-linear-gradient(45deg, rgba(0,0,0,0.02), rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.045) 10px, rgba(0,0,0,0.045) 20px);
+}
+.top-sale-rank {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  background: var(--ink);
+  color: var(--paper-card);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 0 4px;
+  border-radius: 5px;
+}
+.top-sale-info { padding: 0; min-width: 0; flex: 1; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.top-sale-text { min-width: 0; }
+.top-sale-info .addr { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-sale-info .suburb { font-size: 10.5px; }
+.top-sale-price {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brass);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stamp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 4px;
+}
+.stamp-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stamp-count-num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-light);
+}
+
+.stamp {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* Tables */
+.tab-panel { }
+.tab-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+.tab-panel-head h3 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+.tab-panel-note {
+  font-size: 12px;
+  color: var(--ink-light);
+  font-style: italic;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--paper-card);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 9px 10px;
+  flex: 1;
+  min-width: 100%;
+  color: var(--ink-light);
+}
+.search-box input {
+  border: none;
+  background: none;
+  outline: none;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  width: 100%;
+}
+.toolbar select {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  padding: 9px 10px;
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--rule);
+  background: var(--paper-card);
+  color: var(--ink);
+  flex: 1;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -2px;
+}
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ledger-table th {
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ink-light);
+  padding: 10px 12px;
+  border-bottom: 1.5px solid var(--ink);
+  white-space: nowrap;
+}
+.ledger-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+.ledger-table.compact th, .ledger-table.compact td { padding: 7px 10px; }
+.ledger-table tr:last-child td { border-bottom: none; }
+.ledger-table tr:hover td { background: rgba(0,0,0,0.02); }
+.ledger-table .num { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+.addr { font-weight: 500; }
+.suburb { font-size: 11.5px; color: var(--ink-light); }
+.empty-state {
+  text-align: center;
+  color: var(--ink-light);
+  font-style: italic;
+  font-size: 13px;
+  padding: 32px 16px;
+  background: var(--paper-card);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  margin: 0;
+}
+
+.entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.entry-card {
+  background: var(--paper-card);
+  border: none;
+  box-shadow: var(--shadow-card);
+  border-radius: 16px;
+  padding: 13px 14px;
+}
+.entry-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.entry-card-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin: -6px -6px 0 0;
+}
+.entry-card-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+.entry-card-meta {
+  font-size: 12px;
+  color: var(--ink-light);
+}
+.entry-card-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--rule);
+}
+.figure { display: flex; flex-direction: column; gap: 2px; }
+.figure-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ink-light);
+}
+.figure-value {
+  font-family: var(--font-mono);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.entry-card-confirm {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--rule);
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--ink-light);
+  cursor: pointer;
+  padding: 8px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn:active { background: rgba(0,0,0,0.08); color: var(--ink); }
+
+.confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.text-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+.text-btn.danger { color: var(--stamp-red); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 16px;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn.primary { background: var(--ink); color: var(--paper-card); }
+.btn.primary:active { background: #171407; }
+.btn.ghost { background: none; color: var(--ink); border-color: var(--rule); }
+.btn.ghost:active { border-color: var(--ink); }
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(38, 33, 17, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow-y: auto;
+  z-index: 50;
+}
+.modal {
+  background: var(--paper-card);
+  border-radius: 20px 20px 0 0;
+  border: none;
+  box-shadow: 0 -4px 24px rgba(20, 22, 31, 0.12);
+  width: 100%;
+  max-width: 100%;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  animation: sheet-up 0.2s ease-out;
+}
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0.5; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+.modal-head h3 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  margin: 0;
+}
+.modal-body {
+  padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.import-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--brass);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 0 10px;
+  cursor: pointer;
+}
+.import-help {
+  font-size: 12.5px;
+  color: var(--ink-light);
+  line-height: 1.45;
+  margin: 0 0 12px;
+}
+.import-textarea {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px;
+  width: 100%;
+  resize: vertical;
+}
+.import-result {
+  font-size: 12.5px;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.import-result.ok { background: rgba(60, 110, 71, 0.12); color: var(--stamp-green); }
+.import-result.error { background: rgba(140, 59, 46, 0.12); color: var(--stamp-red); }
+
+.entry-form { }
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-wide { grid-column: 1 / -1; }
+.field-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ink-light);
+}
+.field-hint {
+  font-size: 11.5px;
+  color: var(--ink-light);
+  line-height: 1.4;
+}
+.field input, .field select, .field textarea {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px 10px;
+  width: 100%;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: 2px solid var(--brass);
+  outline-offset: 0px;
+}
+.derived {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  padding: 8px 0;
+  color: var(--ink-light);
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* Mini charts (no external chart library) */
+.mini-chart { display: flex; flex-direction: column; }
+.mini-chart-bars { display: flex; align-items: flex-end; gap: 6px; flex: 1; }
+.mini-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+.mini-bar-track { width: 100%; max-width: 30px; height: calc(100% - 18px); display: flex; align-items: flex-end; }
+.mini-bar-fill { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
+.mini-bar-label { font-size: 10px; color: var(--ink-light); margin-top: 4px; font-family: var(--font-ui); white-space: nowrap; }
+
+.mini-hbar-chart { display: flex; flex-direction: column; gap: 9px; }
+.mini-hbar-row { display: flex; align-items: center; gap: 8px; }
+.mini-hbar-label { width: 88px; flex-shrink: 0; font-size: 11px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-hbar-track { flex: 1; background: var(--rule); border-radius: 3px; height: 14px; overflow: hidden; }
+.mini-hbar-fill { height: 100%; border-radius: 3px; min-width: 2px; }
+.mini-hbar-value { width: 68px; flex-shrink: 0; text-align: right; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-light); }
+
+.mini-area-chart { display: flex; flex-direction: column; }
+.mini-area-svg { width: 100%; flex: 1; display: block; }
+.mini-area-labels { display: flex; justify-content: space-between; margin-top: 4px; }
+.mini-area-label { font-size: 8.5px; color: var(--ink-light); font-family: var(--font-ui); }
+
+`;
+
+const rootEl = document.getElementById("root");
+ReactDOM.createRoot(rootEl).render(<PropertySalesTracker />);
+
+</script>
+</body>
+</html>
